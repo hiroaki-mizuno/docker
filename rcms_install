@@ -1,0 +1,142 @@
+#!/usr/bin/ruby
+# -*- coding: utf-8 -*-
+require 'pp'
+
+# 引数には、ドメイン指定
+virtual_host=ARGV[1]
+
+if virtual_host.nil?
+  puts "invalid params"
+  exit
+end
+
+
+# dockerfileを書き換える
+cmds=ARGV[0].split("\|")
+
+# http_regex = /("https?:\/\/.*")/
+http_regex = /(https?:\/\/[^\"]*)/
+
+str.split("\|")[0].match(/(https?:\/\/[^\"]*)/)
+
+docker_file = `curl -L "{#$1}"`
+docker_cmds = docker_file.split("\n")
+
+docker_cmds.each_with_index do |cmd,i|
+  if cmd.match(http_regex) then
+    docker_cmds[i] = cmd.split("&&")[0]
+
+    rcms_install_shell = `curl -L "{#$1}"`
+    rcms_install_shell.gsub!('192.168.59.103',virtual_host)
+
+    rcms_install_cmds = rcms_install_shell.split("\n")
+    rcms_install_cmds.each do |rcms_cmd|
+      next if cmd.match("#")
+      new_cmd = 'RUN '
+      new_cmd += rcms_cmd
+      docker_cmds.push(rcms_cmd)
+    end
+  end
+end
+
+pp docker_cmds
+
+
+
+
+# dockerfile = `curl -L "#{ARGV[0]}" 2> /dev/null`
+# match = dockerfile.scan(http_regex)
+
+# installfile = `curl -L #{match[0]} 2> /dev/null`
+# match = installfile.scan(http_regex)
+# site_id = /SITE_ID.*?:.*?(\d+)/.match(installfile)[1]
+
+# system("wget -O /tmp/chef.tar.gz #{match[0]}")
+# system("rm -Rf /usr/local/chef && rm -Rf /tmp/chef/ && mkdir /tmp/chef && tar zxvfs /tmp/chef.tar.gz -C /tmp/chef/ && cp -Rpf /tmp/chef /usr/local/")
+# system("wget -O /home/rcms/rcms.gz #{match[1]}")
+# system("wget -O /home/rcms/rcms.tar.gz #{match[2]}")
+
+# system("service postgresql-9.4 start")
+# system("mkdir /usr/local/chef/bin")
+# chef_json = <<EOL
+# {
+# "target":"",
+# "temp_path":"/tmp",
+# "action":"/install",
+# "run_list":["role['rcms_site']"],
+# "rcms":{
+#   "SITE_ID":"#{site_id}",
+#   "SITE_PATH":"/home/rcms",
+#   "DOMAIN_NAME":"#{name}.localhost",
+#   "ROOT_URL":"http://#{name}.localhost",
+#   "ROOT_SSL_URL":"http://#{name}.localhost",
+#   "IS_ADMIN_V2":0,
+#   "IS_USER_V2":0,
+#   "USE_ADMIN_PHP":0,
+#   "TOPICS_MAX_EXTENSION":30,
+#   "MEMBER_MAX_EXTENSION":99}
+# }
+# EOL
+
+# system("echo '#{chef_json}' >> #{JSON_FILE}")
+
+# system("chef-solo -c /usr/local/chef/config/solo.rb -j '#{JSON_FILE}'")
+
+# system("rm -r /home/rcms/#{site_id}/lib/modules")
+# system("ln -s /sites/#{site_id}/lib/modules /home/rcms/#{site_id}/lib/modules")
+
+# if File::exists?("/sites/#{site_id}/lib/config.php")
+#   system("rm -r /home/rcms/#{site_id}/lib/config.php")
+#   system("ln -s /sites/#{site_id}/lib/config.php /home/rcms/#{site_id}/lib/config.php")
+# end
+
+# system("mkdir -p /home/rcms/#{site_id}/lib/langconfig/")
+# File::open("/home/rcms/#{site_id}/lib/langconfig/ja.php" , "w"){|f|
+#   f.write <<EOL
+# <?php
+# if(is_file(SITE_LIB_PATH."/config.php")){
+#   require_once(SITE_LIB_PATH."/config.php");
+# }
+# if(is_file("/home/rcms/.mylib.php")){
+#   require_once("/home/rcms/.mylib.php");
+# }
+# EOL
+#   f.flush
+#   f.close
+# }
+
+
+# File::open("/home/rcms/#{site_id}/lib/default.php", "r+"){|f|
+#   content = f.read
+#   content.gsub!('$display_errors = false;', '$display_errors = true;');
+#   content.gsub!('define("RCMS_DEV_MODE","0")','define("RCMS_DEV_MODE","1")')
+#   f.rewind
+#   f.write(content);
+#   f.flush
+#   f.close
+# }
+
+# htaccess = <<EOF
+# <Files ~ "^.(htaccess|htpasswd)$">
+# deny from all
+# </Files>
+# php_value include_path "/home/rcms/#{site_id}/lib
+# php_value session.name RCMSSESS
+# EOF
+
+# File::open("/home/rcms/#{site_id}/html/.htaccess", "w"){|f|
+#   f.write(htaccess)
+# }
+
+# begin
+#   require 'rubygems'
+#   require 'sqlite3'
+#   smtp_param = "port::465\nfrom::skobayashi@diverta.co.jp\nuser::skobayashi@diverta.co.jp\npass::<password>\nprotocol::SMTP_AUTH"
+#   db =  SQLite3::Database.new("/home/rcms/#{site_id}/db/site.db")
+#   ps = db.prepare("UPDATE st_site_conf SET value = :val WHERE sys_nm = :name")
+#   ps.execute('name'=>'MAIL_SEND_SMTP_SERVER', 'val'=>'ssl://smtp.gmail.com')
+#   ps.execute('name'=>'mail_send_smtp_param', 'val'=>smtp_param)
+#   ps.close
+#   db.close
+# rescue LoadError
+# end
