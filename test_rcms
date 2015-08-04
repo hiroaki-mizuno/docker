@@ -73,32 +73,35 @@ new_cmds = Array.new
 docker_cmds.each_with_index do |cmd,i|
 
   if cmd.match(http_regex) then
-    new_cmds.push(cmd.split("&&")[0])
+    # new_cmds.push(cmd.split("&&")[0])
 
     rcms_install_shell = `curl -L "#{$1}"`
 
     rcms_install_shell.gsub!('192.168.59.103',virtual_host_url)
 
-    # rcms_install_cmds = rcms_install_shell.split("\n")
-    # rcms_install_cmds.each_with_index do |rcms_cmd,j|
-    #   next if rcms_cmd.match("#") || rcms_cmd.empty? || j==1
+    rcms_install_cmds = rcms_install_shell.split("\n")
+    rcms_install_cmds.each_with_index do |rcms_cmd,j|
+      next if rcms_cmd.match("#") || rcms_cmd.empty? || j==1
 
-    #   if rcms_cmd.match("RUN_LIST_JSON") then
-    #     rcms_cmd.gsub!('"${RUN_LIST_JSON}"','/usr/local/chef/bin/run_list_rcms.json')
+      if rcms_cmd.match("RUN_LIST_JSON") then
+        rcms_cmd.gsub!('"${RUN_LIST_JSON}"','/usr/local/chef/bin/run_list_rcms.json')
+        # if rcms_cmd.match("echo") then
+          #rcms_cmd = "echo '#{run_list_json}' > '/usr/local/chef/bin/run_list_rcms.json'"
+          # new_cmds.push('RUN rm /var/lib/pgsql/9.4/data/postmaster.pid')
+          # new_cmds.push('RUN /etc/init.d/postgresql-9.4 start')
+        #   new_cmds.push('RUN ls -al /tmp/')
+        # end
+      end
 
-    #     if rcms_cmd.match("echo") then
-    #       #rcms_cmd = "echo '#{run_list_json}' > '/usr/local/chef/bin/run_list_rcms.json'"
-    #       new_cmds.push('RUN rm /var/lib/pgsql/9.4/data/postmaster.pid')
-    #       new_cmds.push('RUN /etc/init.d/postgresql-9.4 start')
-    #       new_cmds.push('RUN ls -al /tmp/')
-    #     end
-    #   end
+      if rcms_cmd.match("chef")  || rcms_cmd.match("postgres") then
+        rcms_cmd = '/etc/init.d/postgresql-9.4 start && ' + rcms_cmd
+      end
 
-    #   new_cmd = 'RUN '
-    #   new_cmd += rcms_cmd
-    #   new_cmds.push(new_cmd)
-    # end
-    new_cmds.push("RUN echo '#{rcms_install_shell}' | sh")
+      new_cmd = 'RUN '
+      new_cmd += rcms_cmd
+      new_cmds.push(new_cmd)
+    end
+    # new_cmds.push("RUN echo '#{rcms_install_shell}' | sh")
   else
     new_cmds.push(cmd)
   end
