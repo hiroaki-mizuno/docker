@@ -1,142 +1,168 @@
 #!/usr/bin/ruby
 # -*- coding: utf-8 -*-
+
 require 'pp'
+require 'open3'
 
-# 引数には、ドメイン指定
-virtual_host=ARGV[1]
 
-if virtual_host.nil?
-  puts "invalid params"
-  exit
-end
+# 各種設定
+rcms_sites_dir = '/Users/diverta/rcms/RCMS-sites'
+rcms_open_dev_dir = '/Users/diverta/rcms/RCMS-OpenDev-ClosedBeta/nfs'
+
+docker_dir = '/Users/diverta/rcms/docker'
+
+docker_ip = "192.168.59.103"
+
+virtual_host_url = ARGV[0]
+
+install_cmds=STDIN.gets.split("|")
+
+#virtual_host_urlを取得
+# virtual_host = install_cmds[1].match(/VIRTUAL_HOST=(?<url>\S*)/)
+# virtual_host_url = virtual_host[:url]
+
+#site_idを取得
+site_id = install_cmds[1].match(/rcms-(?<site_id>\d*)/)[:site_id]
+
+p site_id
+p virtual_host_url
 
 
 # dockerfileを書き換える
-cmds=ARGV[0].split("\|")
 
-# http_regex = /("https?:\/\/.*")/
+# dockerfileを取得
 http_regex = /(https?:\/\/[^\"]*)/
+install_cmds[0].match(http_regex)
 
-str.split("\|")[0].match(/(https?:\/\/[^\"]*)/)
+docker_file = `curl -L "#{$1}"`
 
-docker_file = `curl -L "{#$1}"`
 docker_cmds = docker_file.split("\n")
 
+admin_password = ""
+new_cmds = Array.new
+
+#doker_fileを書き換え
 docker_cmds.each_with_index do |cmd,i|
   if cmd.match(http_regex) then
-    docker_cmds[i] = cmd.split("&&")[0]
 
-    rcms_install_shell = `curl -L "{#$1}"`
-    rcms_install_shell.gsub!('192.168.59.103',virtual_host)
+    rcms_install_shell = `curl -L "#{$1}"`
+
+    admin_password = rcms_install_shell.match(/login_pwd='(?<admin_password>\w*)'/)[:admin_password]
+    p admin_password
+
+    rcms_install_shell.gsub!(docker_ip,virtual_host_url)
 
     rcms_install_cmds = rcms_install_shell.split("\n")
-    rcms_install_cmds.each do |rcms_cmd|
-      next if cmd.match("#")
+    rcms_install_cmds.each_with_index do |rcms_cmd,j|
+      next if rcms_cmd.match("#") || rcms_cmd.empty? || j==1
+
+      if rcms_cmd.match("RUN_LIST_JSON") then
+        rcms_cmd.gsub!('"${RUN_LIST_JSON}"','/usr/local/chef/bin/run_list_rcms.json')
+      end
+
+      #毎回/etc/init.d/postgresql-9.4 startをスタートさせないといけない
+      #はまった
+      if rcms_cmd.match("chef-solo")  || rcms_cmd.match("postgres") then
+        rcms_cmd = '/etc/init.d/postgresql-9.4 start && ' + rcms_cmd
+      end
+
       new_cmd = 'RUN '
       new_cmd += rcms_cmd
-      docker_cmds.push(rcms_cmd)
+      new_cmds.push(new_cmd)
     end
+  else
+    new_cmds.push(cmd)
   end
 end
 
-pp docker_cmds
+new_cmds.push("ADD rcms_util.rb /home/rcms/")
+new_cmds.push("RUN ruby /home/rcms/rcms_util.rb #{site_id}")
 
+new_docker_file = new_cmds.join("\n")
 
+new_docker_file.gsub!(admin_password,"Password")
 
+puts new_docker_file
+exit 0
 
-# dockerfile = `curl -L "#{ARGV[0]}" 2> /dev/null`
-# match = dockerfile.scan(http_regex)
+#cmdを書き換える
+split_cmds = install_cmds[1].split(" ")
+new_docker_cmds = Array.new
+skip_index = 100
 
-# installfile = `curl -L #{match[0]} 2> /dev/null`
-# match = installfile.scan(http_regex)
-# site_id = /SITE_ID.*?:.*?(\d+)/.match(installfile)[1]
+split_cmds.each_with_index do |cmd,i|
+  if skip_index == 100 then
+    if !/\&\&/.match(cmd) then
+      next
+    else
+      skip_index = 0
+      next
+    end
+  end
 
-# system("wget -O /tmp/chef.tar.gz #{match[0]}")
-# system("rm -Rf /usr/local/chef && rm -Rf /tmp/chef/ && mkdir /tmp/chef && tar zxvfs /tmp/chef.tar.gz -C /tmp/chef/ && cp -Rpf /tmp/chef /usr/local/")
-# system("wget -O /home/rcms/rcms.gz #{match[1]}")
-# system("wget -O /home/rcms/rcms.tar.gz #{match[2]}")
+  next if skip_index == i
 
-# system("service postgresql-9.4 start")
-# system("mkdir /usr/local/chef/bin")
-# chef_json = <<EOL
-# {
-# "target":"",
-# "temp_path":"/tmp",
-# "action":"/install",
-# "run_list":["role['rcms_site']"],
-# "rcms":{
-#   "SITE_ID":"#{site_id}",
-#   "SITE_PATH":"/home/rcms",
-#   "DOMAIN_NAME":"#{name}.localhost",
-#   "ROOT_URL":"http://#{name}.localhost",
-#   "ROOT_SSL_URL":"http://#{name}.localhost",
-#   "IS_ADMIN_V2":0,
-#   "IS_USER_V2":0,
-#   "USE_ADMIN_PHP":0,
-#   "TOPICS_MAX_EXTENSION":30,
-#   "MEMBER_MAX_EXTENSION":99}
-# }
-# EOL
+  if /^-v$/.match(cmd) || /^-p$/.match(cmd) then
+    skip_index = i+1
+    next
+  end
 
-# system("echo '#{chef_json}' >> #{JSON_FILE}")
+  if /^-d$/.match(cmd) then
+    new_docker_cmds.push("-v")
+    new_docker_cmds.push(rcms_open_dev_dir+":/home/rcms/nfs")
 
-# system("chef-solo -c /usr/local/chef/config/solo.rb -j '#{JSON_FILE}'")
+    file_a = "/lib/modules"
+    if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_a}") then
+      new_docker_cmds.push("-v")
+      new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_a}:/home/rcms/#{site_id}#{file_a}")
+    end
 
-# system("rm -r /home/rcms/#{site_id}/lib/modules")
-# system("ln -s /sites/#{site_id}/lib/modules /home/rcms/#{site_id}/lib/modules")
+    file_b = "/lib/config.php"
+    if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_b}") then
+      new_docker_cmds.push("-v")
+      new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_b}:/home/rcms/#{site_id}#{file_b}")
+    end
 
-# if File::exists?("/sites/#{site_id}/lib/config.php")
-#   system("rm -r /home/rcms/#{site_id}/lib/config.php")
-#   system("ln -s /sites/#{site_id}/lib/config.php /home/rcms/#{site_id}/lib/config.php")
-# end
+    file_c = "/lib/smarty"
+    if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_c}") then
+      new_docker_cmds.push("-v")
+      new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_c}:/home/rcms/#{site_id}#{file_c}")
+    end
 
-# system("mkdir -p /home/rcms/#{site_id}/lib/langconfig/")
-# File::open("/home/rcms/#{site_id}/lib/langconfig/ja.php" , "w"){|f|
-#   f.write <<EOL
-# <?php
-# if(is_file(SITE_LIB_PATH."/config.php")){
-#   require_once(SITE_LIB_PATH."/config.php");
-# }
-# if(is_file("/home/rcms/.mylib.php")){
-#   require_once("/home/rcms/.mylib.php");
-# }
-# EOL
-#   f.flush
-#   f.close
-# }
+    file_d = "/templates"
+    if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_d}") then
+      Dir::entries("#{rcms_sites_dir}/#{site_id}#{file_d}").each { |f|
+        next if /\./.match(f)
+        new_docker_cmds.push("-v")
+        new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_d}/#{f}:/home/rcms/#{site_id}#{file_d}/#{f}")
+      }
+    end
 
+    new_docker_cmds.push("-e")
+    new_docker_cmds.push("VIRTUAL_HOST=#{virtual_host_url}")
 
-# File::open("/home/rcms/#{site_id}/lib/default.php", "r+"){|f|
-#   content = f.read
-#   content.gsub!('$display_errors = false;', '$display_errors = true;');
-#   content.gsub!('define("RCMS_DEV_MODE","0")','define("RCMS_DEV_MODE","1")')
-#   f.rewind
-#   f.write(content);
-#   f.flush
-#   f.close
-# }
+    new_docker_cmds.push("-p")
+    new_docker_cmds.push("22")
+  end
 
-# htaccess = <<EOF
-# <Files ~ "^.(htaccess|htpasswd)$">
-# deny from all
-# </Files>
-# php_value include_path "/home/rcms/#{site_id}/lib
-# php_value session.name RCMSSESS
-# EOF
+  new_docker_cmds.push(cmd)
+end
 
-# File::open("/home/rcms/#{site_id}/html/.htaccess", "w"){|f|
-#   f.write(htaccess)
-# }
+new_docker_cmd = new_docker_cmds.join(" ")
 
-# begin
-#   require 'rubygems'
-#   require 'sqlite3'
-#   smtp_param = "port::465\nfrom::skobayashi@diverta.co.jp\nuser::skobayashi@diverta.co.jp\npass::<password>\nprotocol::SMTP_AUTH"
-#   db =  SQLite3::Database.new("/home/rcms/#{site_id}/db/site.db")
-#   ps = db.prepare("UPDATE st_site_conf SET value = :val WHERE sys_nm = :name")
-#   ps.execute('name'=>'MAIL_SEND_SMTP_SERVER', 'val'=>'ssl://smtp.gmail.com')
-#   ps.execute('name'=>'mail_send_smtp_param', 'val'=>smtp_param)
-#   ps.close
-#   db.close
-# rescue LoadError
-# end
+puts new_docker_file
+puts new_docker_cmd
+
+exit 0
+
+File.unlink "#{docker_dir}/Dockerfile" if File.exist?("#{docker_dir}/Dockerfile")
+
+File.open("#{docker_dir}/Dockerfile", "w") do |file|
+  file.puts(new_docker_file)
+end
+
+system("docker build -t rcms-#{site_id} #{docker_dir}")
+
+system(new_docker_cmd)
+
+exit 0
