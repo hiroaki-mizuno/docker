@@ -20,10 +20,10 @@ function mark($exit = false){
 
 }
 
-runkit_function_redefine("setDGF", '$key, $id = 0', 'return "MY_DG_CODE";');
-runkit_function_redefine("getDGF", '$key, $id = 0', 'return "MY_DG_CODE";');
-runkit_function_redefine("setDGB", '$key, $id = 0', 'return "MY_DG_CODE";');
-runkit_function_redefine("getDGB", '$key, $id = 0', 'return "MY_DG_CODE";');
+// runkit_function_redefine("setDGF", '$key, $id = 0', 'return "MY_DG_CODE";');
+// runkit_function_redefine("getDGF", '$key, $id = 0', 'return "MY_DG_CODE";');
+// runkit_function_redefine("setDGB", '$key, $id = 0', 'return "MY_DG_CODE";');
+// runkit_function_redefine("getDGB", '$key, $id = 0', 'return "MY_DG_CODE";');
 
 require_once(LIB_PATH."/modules/login/class/Login.php");
 
