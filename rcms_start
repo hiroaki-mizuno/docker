@@ -56,7 +56,6 @@ if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_d}") then
 end
 
 new_docker_cmds.push("-e VIRTUAL_HOST=#{virtual_host_url}")
-new_docker_cmds.push("-p 80")
 new_docker_cmds.push("-p 22")
 new_docker_cmds.push("-d")
 new_docker_cmds.push("rcms-#{site_id}")

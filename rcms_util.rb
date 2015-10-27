@@ -20,6 +20,7 @@ File::open("/home/rcms/#{site_id}/lib/default.php", "r+"){|f|
   content = f.read
   content.gsub!('$display_errors = false;', '$display_errors = true;');
   content.gsub!('define("RCMS_DEV_MODE","0")','define("RCMS_DEV_MODE","1")')
+  content.gsub!('define("SHOW_DEBUG_TOOL_BAR", false);','define("SHOW_DEBUG_TOOL_BAR", true);')
   f.rewind
   f.write(content);
   f.flush

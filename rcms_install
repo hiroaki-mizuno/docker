@@ -77,79 +77,80 @@ docker_cmds.each_with_index do |cmd,i|
 end
 
 new_cmds.push("ADD rcms_util.rb /home/rcms/")
+new_cmds.push("ADD .mylib.php /home/rcms/")
 new_cmds.push("RUN ruby /home/rcms/rcms_util.rb #{site_id}")
 
 new_docker_file = new_cmds.join("\n")
 
 #new_docker_file.gsub!(admin_password,"Password")
 
-#cmdを書き換える
-split_cmds = install_cmds[1].split(" ")
-new_docker_cmds = Array.new
-skip_index = 100
+# #cmdを書き換える
+# split_cmds = install_cmds[1].split(" ")
+# new_docker_cmds = Array.new
+# skip_index = 100
 
-split_cmds.each_with_index do |cmd,i|
-  if skip_index == 100 then
-    if !/\&\&/.match(cmd) then
-      next
-    else
-      skip_index = 0
-      next
-    end
-  end
+# split_cmds.each_with_index do |cmd,i|
+#   if skip_index == 100 then
+#     if !/\&\&/.match(cmd) then
+#       next
+#     else
+#       skip_index = 0
+#       next
+#     end
+#   end
 
-  next if skip_index == i
+#   next if skip_index == i
 
-  if /^-v$/.match(cmd) || /^-p$/.match(cmd) then
-    skip_index = i+1
-    next
-  end
+#   if /^-v$/.match(cmd) || /^-p$/.match(cmd) then
+#     skip_index = i+1
+#     next
+#   end
 
-  if /^-d$/.match(cmd) then
-    new_docker_cmds.push("-v")
-    new_docker_cmds.push(rcms_open_dev_dir+":/home/rcms/nfs")
+#   if /^-d$/.match(cmd) then
+#     new_docker_cmds.push("-v")
+#     new_docker_cmds.push(rcms_open_dev_dir+":/home/rcms/nfs")
 
-    file_a = "/lib/modules"
-    if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_a}") then
-      new_docker_cmds.push("-v")
-      new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_a}:/home/rcms/#{site_id}#{file_a}")
-    end
+#     file_a = "/lib/modules"
+#     if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_a}") then
+#       new_docker_cmds.push("-v")
+#       new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_a}:/home/rcms/#{site_id}#{file_a}")
+#     end
 
-    file_b = "/lib/config.php"
-    if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_b}") then
-      new_docker_cmds.push("-v")
-      new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_b}:/home/rcms/#{site_id}#{file_b}")
-    end
+#     file_b = "/lib/config.php"
+#     if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_b}") then
+#       new_docker_cmds.push("-v")
+#       new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_b}:/home/rcms/#{site_id}#{file_b}")
+#     end
 
-    file_c = "/lib/smarty"
-    if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_c}") then
-      new_docker_cmds.push("-v")
-      new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_c}:/home/rcms/#{site_id}#{file_c}")
-    end
+#     file_c = "/lib/smarty"
+#     if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_c}") then
+#       new_docker_cmds.push("-v")
+#       new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_c}:/home/rcms/#{site_id}#{file_c}")
+#     end
 
-    file_d = "/templates"
-    if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_d}") then
-      Dir::entries("#{rcms_sites_dir}/#{site_id}#{file_d}").each { |f|
-        next if /\./.match(f)
-        new_docker_cmds.push("-v")
-        new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_d}/#{f}:/home/rcms/#{site_id}#{file_d}/#{f}")
-      }
-    end
+#     file_d = "/templates"
+#     if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_d}") then
+#       Dir::entries("#{rcms_sites_dir}/#{site_id}#{file_d}").each { |f|
+#         next if /\./.match(f)
+#         new_docker_cmds.push("-v")
+#         new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_d}/#{f}:/home/rcms/#{site_id}#{file_d}/#{f}")
+#       }
+#     end
 
-    new_docker_cmds.push("-e")
-    new_docker_cmds.push("VIRTUAL_HOST=#{virtual_host_url}")
+#     new_docker_cmds.push("-e")
+#     new_docker_cmds.push("VIRTUAL_HOST=#{virtual_host_url}")
 
-    new_docker_cmds.push("-p")
-    new_docker_cmds.push("22")
-  end
+#     new_docker_cmds.push("-p")
+#     new_docker_cmds.push("22")
+#   end
 
-  new_docker_cmds.push(cmd)
-end
+#   new_docker_cmds.push(cmd)
+# end
 
-new_docker_cmd = new_docker_cmds.join(" ")
+# new_docker_cmd = new_docker_cmds.join(" ")
 
 puts new_docker_file
-puts new_docker_cmd
+# puts new_docker_cmd
 
 pass_config = YAML.load_file("#{docker_dir}/pass.yaml")
 
@@ -163,7 +164,6 @@ File.open("#{docker_dir}/pass.yaml", "w") do |file|
   YAML.dump(pass_config, file)
 end
 
-
 File.unlink "#{docker_dir}/Dockerfile" if File.exist?("#{docker_dir}/Dockerfile")
 
 File.open("#{docker_dir}/Dockerfile", "w") do |file|
@@ -172,6 +172,6 @@ end
 
 system("docker build -t rcms-#{site_id} #{docker_dir}")
 
-system(new_docker_cmd)
+# system(new_docker_cmd)
 
 exit 0
