@@ -1,19 +1,19 @@
 site_id = ARGV[0]
 
-# system("mkdir -p /home/rcms/#{site_id}/lib/langconfig/")
-# File::open("/home/rcms/#{site_id}/lib/langconfig/ja.php" , "w"){|f|
-#   f.write <<EOL
-# <?php
-# if(is_file(SITE_LIB_PATH."/config.php")){
-#   require_once(SITE_LIB_PATH."/config.php");
-# }
-# if(is_file("/home/rcms/.mylib.php")){
-#   require_once("/home/rcms/.mylib.php");
-# }
-# EOL
-#   f.flush
-#   f.close
-# }
+system("mkdir -p /home/rcms/#{site_id}/lib/langconfig/")
+File::open("/home/rcms/#{site_id}/lib/langconfig/ja.php" , "w"){|f|
+  f.write <<EOL
+<?php
+if(is_file(SITE_LIB_PATH."/config.php")){
+  require_once(SITE_LIB_PATH."/config.php");
+}
+if(is_file("/home/rcms/.mylib.php")){
+  require_once("/home/rcms/.mylib.php");
+}
+EOL
+  f.flush
+  f.close
+}
 
 
 File::open("/home/rcms/#{site_id}/lib/default.php", "r+"){|f|

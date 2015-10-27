@@ -1,3 +1,4 @@
 *.log
 *.json
 Dockerfile
+*.yaml

@@ -3,11 +3,13 @@
 
 require 'pp'
 require 'open3'
+require 'yaml'
 
 
 # 各種設定
 rcms_sites_dir = '/Users/diverta/rcms/RCMS-sites'
 rcms_open_dev_dir = '/Users/diverta/rcms/RCMS-OpenDev-ClosedBeta/nfs'
+docker_dir = '/Users/diverta/rcms/docker'
 
 site_id = ARGV[0]
 virtual_host_url = ARGV[1]
@@ -16,7 +18,12 @@ p "start #{site_id} #{virtual_host_url}"
 
 new_docker_cmds = Array.new
 
-new_docker_cmds.push("docker run --name 'rcms-#{site_id}-container'")
+pass_config = YAML.load_file("#{docker_dir}/pass.yaml")
+exit 0 if !pass_config
+admin_password = pass_config[site_id]
+exit 0 if !admin_password
+
+new_docker_cmds.push("docker run --name 'rcms-#{site_id}-#{admin_password}'")
 
 new_docker_cmds.push("-v")
 new_docker_cmds.push(rcms_open_dev_dir+":/home/rcms/nfs")

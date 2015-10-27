@@ -3,6 +3,7 @@
 
 require 'pp'
 require 'open3'
+require 'yaml'
 
 
 # 各種設定
@@ -80,10 +81,7 @@ new_cmds.push("RUN ruby /home/rcms/rcms_util.rb #{site_id}")
 
 new_docker_file = new_cmds.join("\n")
 
-new_docker_file.gsub!(admin_password,"Password")
-
-puts new_docker_file
-exit 0
+#new_docker_file.gsub!(admin_password,"Password")
 
 #cmdを書き換える
 split_cmds = install_cmds[1].split(" ")
@@ -153,7 +151,18 @@ new_docker_cmd = new_docker_cmds.join(" ")
 puts new_docker_file
 puts new_docker_cmd
 
-exit 0
+pass_config = YAML.load_file("#{docker_dir}/pass.yaml")
+
+if pass_config
+  pass_config[site_id] = admin_password
+else
+  pass_config = {site_id => admin_password}
+end
+
+File.open("#{docker_dir}/pass.yaml", "w") do |file|
+  YAML.dump(pass_config, file)
+end
+
 
 File.unlink "#{docker_dir}/Dockerfile" if File.exist?("#{docker_dir}/Dockerfile")
 
