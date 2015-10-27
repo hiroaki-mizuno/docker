@@ -76,7 +76,7 @@ new_cmds.push("RUN ruby /home/rcms/rcms_util.rb #{site_id}")
 
 new_docker_file = new_cmds.join("\n")
 
-#new_docker_file.gsub!(admin_password,"Password")
+new_docker_file.gsub!(admin_password,"password")
 
 puts new_docker_file
 
