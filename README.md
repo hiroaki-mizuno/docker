@@ -16,7 +16,7 @@ cf.[jwilder/nginx-proxy](https://github.com/jwilder/nginx-proxy)
 echo 'curl -L ....... <- this is docker script ' | ./rcms_build your_local_url.com
 ```
 
-than build your image as URL = your_url.com
+than build your image as URL = your_local_url.com
 
 edit /etc/host if you need    
 
