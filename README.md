@@ -2,7 +2,7 @@
 
 ## Usage 
 
-### run nginx proxy  
+### 1. run nginx proxy  
 
 ```
 docker run -p 80:80 -e DOCKER_HOST -e DOCKER_CERT_PATH -e DOCKER_TLS_VERIFY -v $DOCKER_CERT_PATH:$DOCKER_CERT_PATH -d -it jwilder/nginx-proxy
@@ -10,7 +10,7 @@ docker run -p 80:80 -e DOCKER_HOST -e DOCKER_CERT_PATH -e DOCKER_TLS_VERIFY -v $
 
 cf.[jwilder/nginx-proxy](https://github.com/jwilder/nginx-proxy)
 
-### build your image  
+### 2. build your image  
 
 ```
 echo 'curl -L ....... <- this is docker script ' | ./rcms_build your_local_url.com
@@ -20,7 +20,7 @@ than build your image as URL = your_url.com
 
 edit /etc/host if you need    
 
-### run your docker image
+### 3. run your docker image
  
 
 ```
