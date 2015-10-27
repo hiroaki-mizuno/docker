@@ -24,7 +24,7 @@ edit /etc/host if you need
  
 
 ```
-./rcms_run {site_id} your_local_url.com
+./rcms_start {site_id} your_local_url.com
 ```
 
 than run your image.
