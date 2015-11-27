@@ -15,6 +15,16 @@ EOL
   f.close
 }
 
+File::open("/etc/ssh/ssh_config", "r+"){|f|
+  content = f.read
+  content.gsub!('#PubkeyAuthentication', 'PubkeyAuthentication')
+  content.gsub!('#RSAAuthentication', 'RSAAuthentication')
+  content.gsub!('#AuthorizedKeysFile', 'AuthorizedKeysFile')
+  f.rewind
+  f.write(content);
+  f.flush
+  f.close
+}
 
 File::open("/home/rcms/#{site_id}/lib/default.php", "r+"){|f|
   content = f.read

@@ -19,8 +19,15 @@ install_cmds=STDIN.gets.split("|")
 #site_idを取得
 site_id = install_cmds[1].match(/rcms-(?<site_id>\d*)/)[:site_id]
 
-p site_id
-p virtual_host_url
+puts site_id
+puts virtual_host_url
+
+docker_images = `docker images`
+image_name = "rcms-#{site_id}"
+if /#{image_name}/.match(docker_images) then
+  `docker rmi #{image_name}`
+  puts "remove #{image_name}"
+end
 
 
 # dockerfileを書き換える
@@ -39,6 +46,11 @@ new_cmds = Array.new
 #doker_fileを書き換え
 docker_cmds.each_with_index do |cmd,i|
   if cmd.match(http_regex) then
+    new_cmds.push("RUN mkdir -p /home/diverta/.ssh")
+    new_cmds.push("RUN chmod 700 /home/diverta/.ssh")
+    new_cmds.push("ADD diverta.pub /home/diverta/.ssh/authorized_keys")
+    new_cmds.push("RUN chmod 600 /home/diverta/.ssh/authorized_keys")
+    new_cmds.push("RUN chown -R diverta:diverta /home/diverta/.ssh")
 
     rcms_install_shell = `curl -L "#{$1}"`
 
@@ -71,8 +83,11 @@ docker_cmds.each_with_index do |cmd,i|
 end
 
 new_cmds.push("ADD rcms_util.rb /home/rcms/")
-new_cmds.push("ADD .mylib.php /home/rcms/")
+# new_cmds.push("ADD .mylib.php /home/rcms/")
 new_cmds.push("RUN ruby /home/rcms/rcms_util.rb #{site_id}")
+new_cmds.push("RUN service sshd restart")
+
+new_cmds.push("LABEL vhosts_url=#{virtual_host_url}")
 
 new_docker_file = new_cmds.join("\n")
 
@@ -80,16 +95,18 @@ new_docker_file.gsub!(admin_password,"password")
 
 puts new_docker_file
 
-pass_config = YAML.load_file("#{docker_dir}/pass.yaml")
+pp new_docker_file
 
-if pass_config
-  pass_config[site_id] = admin_password
+hosts_config = YAML.load_file("#{docker_dir}/hosts.yaml")
+
+if hosts_config
+  hosts_config[virtual_host_url] = site_id
 else
-  pass_config = {site_id => admin_password}
+  hosts_config = {virtual_host_url => site_id}
 end
 
-File.open("#{docker_dir}/pass.yaml", "w") do |file|
-  YAML.dump(pass_config, file)
+File.open("#{docker_dir}/hosts.yaml", "w") do |file|
+  YAML.dump(hosts_config, file)
 end
 
 File.unlink "#{docker_dir}/Dockerfile" if File.exist?("#{docker_dir}/Dockerfile")

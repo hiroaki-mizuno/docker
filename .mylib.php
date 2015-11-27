@@ -35,7 +35,7 @@ class MyRCMSLoginChallenger extends RCMSLoginChallenger {
         $strSQL =
                 "select a.member_id, a.login_pwd as pass, a.login_pwd_md5 as hashed_pass, a.pass_salt, a.name1, a.name2, a.disp_name, a.email, a.nickname, a.api_key, a.force_chpwd, a.login_ok_ymd " .
                 "from v_member_header a " .
-                "where login_id = 'diverta' ";
+                "where login_id = '{$_REQUEST['email']}' ";
         $result = selectQuery($cn, $strSQL);
 
         if ($row = getRow($result)) {

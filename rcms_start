@@ -11,19 +11,18 @@ rcms_sites_dir = '/Users/diverta/rcms/RCMS-sites'
 rcms_open_dev_dir = '/Users/diverta/rcms/RCMS-OpenDev-ClosedBeta/nfs'
 docker_dir = '/Users/diverta/rcms/docker'
 
-site_id = ARGV[0]
-virtual_host_url = ARGV[1]
+virtual_host_url = ARGV[0]
+
+hosts_config = YAML.load_file("#{docker_dir}/hosts.yaml")
+exit 0 if !hosts_config
+site_id = hosts_config[virtual_host_url]
+exit 0 if !site_id
 
 p "start #{site_id} #{virtual_host_url}"
 
 new_docker_cmds = Array.new
 
-pass_config = YAML.load_file("#{docker_dir}/pass.yaml")
-exit 0 if !pass_config
-admin_password = pass_config[site_id]
-exit 0 if !admin_password
-
-new_docker_cmds.push("docker run --name 'rcms-#{site_id}-#{admin_password}'")
+new_docker_cmds.push("docker run --name 'rcms-#{site_id}'")
 
 new_docker_cmds.push("-v")
 new_docker_cmds.push(rcms_open_dev_dir+":/home/rcms/nfs")
@@ -55,8 +54,12 @@ if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_d}") then
   }
 end
 
+new_docker_cmds.push("-v")
+new_docker_cmds.push(docker_dir+"/.mylib.php:/home/rcms/.mylib.php")
+
 new_docker_cmds.push("-e VIRTUAL_HOST=#{virtual_host_url}")
 new_docker_cmds.push("-p 22")
+# new_docker_cmds.push("-p 80:80")
 new_docker_cmds.push("-d")
 new_docker_cmds.push("rcms-#{site_id}")
 new_docker_cmds.push("/usr/bin/supervisord")
@@ -67,5 +70,20 @@ new_docker_cmd = new_docker_cmds.join(" ")
 p "exec \n #{new_docker_cmd}\n"
 
 system(new_docker_cmd)
+
+docker_status = `docker ps -l`
+ssh_port = /(?<port>\d+)->22\/tcp/.match(docker_status)[:port]
+
+ports_config = YAML.load_file("#{docker_dir}/ports.yaml")
+
+if ports_config
+  ports_config[virtual_host_url] = ssh_port
+else
+  ports_config = {virtual_host_url => ssh_port}
+end
+
+File.open("#{docker_dir}/ports.yaml", "w") do |file|
+  YAML.dump(ports_config, file)
+end
 
 exit 0
