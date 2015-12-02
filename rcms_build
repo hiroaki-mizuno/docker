@@ -97,6 +97,9 @@ puts new_docker_file
 
 pp new_docker_file
 
+unless File.exist?("#{docker_dir}/hosts.yaml")
+  File.open("#{docker_dir}/hosts.yaml", "w").close()
+end
 hosts_config = YAML.load_file("#{docker_dir}/hosts.yaml")
 
 if hosts_config
