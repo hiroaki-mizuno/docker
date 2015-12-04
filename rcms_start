@@ -74,6 +74,9 @@ system(new_docker_cmd)
 docker_status = `docker ps -l`
 ssh_port = /(?<port>\d+)->22\/tcp/.match(docker_status)[:port]
 
+unless File.exist?("#{docker_dir}/ports.yaml")
+  File.open("#{docker_dir}/ports.yaml", "w").close()
+end
 ports_config = YAML.load_file("#{docker_dir}/ports.yaml")
 
 if ports_config
