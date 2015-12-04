@@ -1,14 +1,8 @@
-#!/usr/bin/ruby
-# -*- coding: utf-8 -*-
+#!/bin/sh
+# requirement: peco
 
-require 'yaml'
+USER=diverta
+HOST=$(echo "$DOCKER_HOST" | awk '{print substr($0, 7)}' | awk -F: '{print $1}')
+PORT=$(docker ps | tail -n +2 | grep rcms | peco | awk -F: '{print $2}' | awk -F- '{print $1}')
 
-docker_dir = '/Users/diverta/rcms/docker'
-virtual_host_url = ARGV[0]
-
-ports_config = YAML.load_file("#{docker_dir}/ports.yaml")
-exit 0 if !ports_config
-ssh_port = ports_config[virtual_host_url]
-exit 0 if !ssh_port
-
-system("ssh -i ~/.ssh/diverta 192.168.99.100 -p #{ssh_port} -l diverta")
+ssh $USER@$HOST -p $PORT -i ~/.ssh/id_rsa

@@ -43,6 +43,14 @@ docker_cmds = docker_file.split("\n")
 admin_password = ""
 new_cmds = Array.new
 
+unless File.exist?('diverta.pub')
+  `cp ~/.ssh/id_rsa.pub diverta.pub`
+  unless $?.success?
+    p "Not found ~/.ssh/id_rsa.pub"
+    exit 1
+  end
+end
+
 #doker_fileを書き換え
 docker_cmds.each_with_index do |cmd,i|
   if cmd.match(http_regex) then
