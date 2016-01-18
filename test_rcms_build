@@ -1,0 +1,169 @@
+#!/usr/bin/ruby
+# -*- coding: utf-8 -*-
+
+require 'pp'
+require 'open3'
+require 'yaml'
+
+
+# 各種設定
+
+docker_dir = '/Users/diverta/rcms/docker'
+# rcms_dir   = '/Users/diverta/rcms'
+
+docker_ip = "192.168.59.103"
+
+virtual_host_url = ARGV[0]
+
+install_cmds = STDIN.gets.split("|")
+
+
+# puts site_id
+puts virtual_host_url
+
+# インストールするshell fileを取得
+http_regex = /(https?:\/\/[^\"]*)/
+install_cmds[0].match(http_regex)
+
+install_shell_file = `curl -L "#{$1}"`
+
+#site_idを取得
+site_id = install_shell_file.match(/rcms-(?<site_id>\d+)/)[:site_id]
+pp site_id
+
+# admin_password を取得
+admin_password = install_shell_file.match(/login_pwd='(?<admin_password>\w*)'/)[:admin_password]
+# pp admin_password
+
+# 前のimageを削除
+# docker_images = `docker images`
+# image_name = "rcms-#{site_id}"
+# if /#{image_name}/.match(docker_images) then
+#   `docker rmi #{image_name}`
+#   puts "remove #{image_name}"
+# end
+
+install_shell_cmds = install_shell_file.split("\n")
+
+pp install_shell_cmds
+
+docker_file_url = ""
+new_docker_cmds = Array.new
+new_shell_cmds = Array.new
+tmp_new_docker_cmds = Array.new
+
+# unless File.exist?('diverta.pub')
+#   `cp ~/.ssh/id_rsa.pub diverta.pub`
+#   unless $?.success?
+#     p "Not found ~/.ssh/id_rsa.pub"
+#     exit 1
+#   end
+# end
+
+skip_flg = 0
+
+# shell fileの作成
+install_shell_cmds.each_with_index do |cmd,i|
+  if skip_flg == 1 then
+    if /docker exec/.match(cmd) then
+      tmp_new_docker_cmds.push(cmd.match(/docker exec \S+ (?<docker_exec_cmd>.*)/)[:docker_exec_cmd])
+    end
+    next
+  end
+
+  if i == 1 then
+    new_shell_cmds.push("GIT_RCMS=#{docker_dir}")
+  end
+
+  # rcms-#{site_id}のとこでimageをbuildしているので、ここでshell fileを区切る
+  if /rcms-#{site_id}/.match(cmd)
+    skip_flg = 1
+
+    #docker_fileを取得
+    docker_file_url = cmd.scan(http_regex)[0][0]
+    pp docker_file_url
+    next
+  end
+
+  new_shell_cmds.push(cmd)
+end
+
+new_shell_cmds.push("docker build -t rcms-#{site_id} #{docker_dir}")
+new_shell_cmds.push("rm -Rf $GIT_RCMS/sites/120960")
+
+pp new_shell_cmds
+
+docker_file = `curl -L "#{docker_file_url}"`
+docker_cmds = docker_file.split("\n")
+
+#doker_fileを書き換え
+docker_cmds.each_with_index do |cmd,i|
+  if /postgresql-/.match(cmd) then
+    new_docker_cmds.push("RUN mkdir -p /home/diverta/.ssh")
+    new_docker_cmds.push("RUN chmod 700 /home/diverta/.ssh")
+    new_docker_cmds.push("ADD diverta.pub /home/diverta/.ssh/authorized_keys")
+    new_docker_cmds.push("RUN chmod 600 /home/diverta/.ssh/authorized_keys")
+    new_docker_cmds.push("RUN chown -R diverta:diverta /home/diverta/.ssh")
+    new_docker_cmds.push("ADD rcms_util.rb /home/rcms/")
+    new_docker_cmds.push("RUN ruby /home/rcms/rcms_util.rb #{site_id}")
+    new_docker_cmds.push("RUN service sshd restart")
+    new_docker_cmds.push("RUN mkdir -p /home/rcms/#{site_id}/lib")
+    new_docker_cmds.push("ADD sites/#{site_id} /home/rcms/120960")
+
+    cmd.gsub!(docker_ip,virtual_host_url)
+  end
+
+  new_docker_cmds.push(cmd)
+end
+
+# commitした後にやるべし
+
+# tmp_new_docker_cmds.each do |cmd|
+#   #ちょっと無理やり
+#   new_docker_cmds.push("RUN /etc/init.d/postgresql-9.4 start && #{cmd}")
+# end
+
+# new_docker_cmds.push("ADD .mylib.php /home/rcms/")
+
+# new_docker_cmds.push("LABEL vhosts_url=#{virtual_host_url}")
+
+new_docker_file = new_docker_cmds.join("\n")
+new_shell_file  = new_shell_cmds.join("\n")
+
+new_docker_file.gsub!(admin_password,"password")
+
+puts new_docker_file
+puts new_shell_file
+
+unless File.exist?("#{docker_dir}/hosts.yaml")
+  File.open("#{docker_dir}/hosts.yaml", "w").close()
+end
+hosts_config = YAML.load_file("#{docker_dir}/hosts.yaml")
+
+if hosts_config
+  hosts_config[virtual_host_url] = site_id
+else
+  hosts_config = {virtual_host_url => site_id}
+end
+
+File.open("#{docker_dir}/hosts.yaml", "w") do |file|
+  YAML.dump(hosts_config, file)
+end
+
+File.unlink "#{docker_dir}/Dockerfile" if File.exist?("#{docker_dir}/Dockerfile")
+
+File.open("#{docker_dir}/Dockerfile", "w") do |file|
+  file.puts(new_docker_file)
+end
+
+File.unlink "#{docker_dir}/install_shell" if File.exist?("#{docker_dir}/install_shell")
+
+File.open("#{docker_dir}/install_shell", "w") do |file|
+  file.puts(new_shell_file)
+end
+
+exit 0
+
+system("sh #{docker_dir}/install_shell")
+
+exit 0

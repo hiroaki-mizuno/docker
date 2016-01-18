@@ -1,0 +1,92 @@
+#!/usr/bin/ruby
+# -*- coding: utf-8 -*-
+
+require 'pp'
+require 'open3'
+require 'yaml'
+
+
+# 各種設定
+rcms_sites_dir = '/Users/diverta/rcms/RCMS-sites'
+rcms_open_dev_dir = '/Users/diverta/rcms/RCMS-OpenDev-ClosedBeta/nfs'
+docker_dir = '/Users/diverta/rcms/docker'
+
+virtual_host_url = ARGV[0]
+
+hosts_config = YAML.load_file("#{docker_dir}/hosts.yaml")
+exit 0 if !hosts_config
+site_id = hosts_config[virtual_host_url]
+exit 0 if !site_id
+
+p "start #{site_id} #{virtual_host_url}"
+
+new_docker_cmds = Array.new
+
+new_docker_cmds.push("docker run --name 'rcms-#{site_id}'")
+
+new_docker_cmds.push("-v")
+new_docker_cmds.push(rcms_open_dev_dir+":/home/rcms/nfs")
+
+file_a = "/lib/modules"
+if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_a}") then
+  new_docker_cmds.push("-v")
+  new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_a}:/home/rcms/#{site_id}#{file_a}")
+end
+
+file_b = "/lib/config.php"
+if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_b}") then
+  new_docker_cmds.push("-v")
+  new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_b}:/home/rcms/#{site_id}#{file_b}")
+end
+
+file_c = "/lib/smarty"
+if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_c}") then
+  new_docker_cmds.push("-v")
+  new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_c}:/home/rcms/#{site_id}#{file_c}")
+end
+
+file_d = "/templates"
+if File.exist?("#{rcms_sites_dir}/#{site_id}#{file_d}") then
+  Dir::entries("#{rcms_sites_dir}/#{site_id}#{file_d}").each { |f|
+    next if /\./.match(f)
+    new_docker_cmds.push("-v")
+    new_docker_cmds.push("#{rcms_sites_dir}/#{site_id}#{file_d}/#{f}:/home/rcms/#{site_id}#{file_d}/#{f}")
+  }
+end
+
+new_docker_cmds.push("-v")
+new_docker_cmds.push(docker_dir+"/.mylib.php:/home/rcms/.mylib.php")
+
+new_docker_cmds.push("-e VIRTUAL_HOST=#{virtual_host_url}")
+new_docker_cmds.push("-p 22")
+# new_docker_cmds.push("-p 80:80")
+new_docker_cmds.push("-d")
+new_docker_cmds.push("rcms-#{site_id}")
+new_docker_cmds.push("/usr/bin/supervisord")
+
+
+new_docker_cmd = new_docker_cmds.join(" ")
+
+p "exec \n #{new_docker_cmd}\n"
+
+system(new_docker_cmd)
+
+docker_status = `docker ps -l`
+ssh_port = /(?<port>\d+)->22\/tcp/.match(docker_status)[:port]
+
+unless File.exist?("#{docker_dir}/ports.yaml")
+  File.open("#{docker_dir}/ports.yaml", "w").close()
+end
+ports_config = YAML.load_file("#{docker_dir}/ports.yaml")
+
+if ports_config
+  ports_config[virtual_host_url] = ssh_port
+else
+  ports_config = {virtual_host_url => ssh_port}
+end
+
+File.open("#{docker_dir}/ports.yaml", "w") do |file|
+  YAML.dump(ports_config, file)
+end
+
+exit 0
