@@ -9,7 +9,7 @@ require 'yaml'
 # 各種設定
 
 docker_dir = '/Users/diverta/rcms/docker'
-# rcms_dir   = '/Users/diverta/rcms'
+rcms_dir   = '/Users/diverta/rcms'
 
 docker_ip = "192.168.59.103"
 
@@ -17,9 +17,11 @@ virtual_host_url = ARGV[0]
 
 install_cmds = STDIN.gets.split("|")
 
-
-# puts site_id
-puts virtual_host_url
+# 初期化
+docker_file_url = ""
+new_docker_cmds = Array.new
+new_shell_cmds = Array.new
+tmp_new_docker_cmds = Array.new
 
 # インストールするshell fileを取得
 http_regex = /(https?:\/\/[^\"]*)/
@@ -29,101 +31,77 @@ install_shell_file = `curl -L "#{$1}"`
 
 #site_idを取得
 site_id = install_shell_file.match(/rcms-(?<site_id>\d+)/)[:site_id]
-pp site_id
 
 # admin_password を取得
 admin_password = install_shell_file.match(/login_pwd='(?<admin_password>\w*)'/)[:admin_password]
-# pp admin_password
 
-# 前のimageを削除
-# docker_images = `docker images`
-# image_name = "rcms-#{site_id}"
-# if /#{image_name}/.match(docker_images) then
-#   `docker rmi #{image_name}`
-#   puts "remove #{image_name}"
-# end
+# コンテナ名を取得
+container_nm = install_shell_file.match(/(?<container_nm>\S*-#{site_id}-#{admin_password})/)[:container_nm]
 
+# shell cmdを編集
 install_shell_cmds = install_shell_file.split("\n")
 
 pp install_shell_cmds
 
-docker_file_url = ""
-new_docker_cmds = Array.new
-new_shell_cmds = Array.new
-tmp_new_docker_cmds = Array.new
-
-# unless File.exist?('diverta.pub')
-#   `cp ~/.ssh/id_rsa.pub diverta.pub`
-#   unless $?.success?
-#     p "Not found ~/.ssh/id_rsa.pub"
-#     exit 1
-#   end
-# end
-
-skip_flg = 0
-
 # shell fileの作成
 install_shell_cmds.each_with_index do |cmd,i|
-  if skip_flg == 1 then
-    if /docker exec/.match(cmd) then
-      tmp_new_docker_cmds.push(cmd.match(/docker exec \S+ (?<docker_exec_cmd>.*)/)[:docker_exec_cmd])
-    end
-    next
-  end
-
   if i == 1 then
     new_shell_cmds.push("GIT_RCMS=#{docker_dir}")
   end
 
-  # rcms-#{site_id}のとこでimageをbuildしているので、ここでshell fileを区切る
-  if /rcms-#{site_id}/.match(cmd)
-    skip_flg = 1
+  # 最後のrm -rfの前でいろいろ実行
+  if /rm -Rf/.match(cmd) && i != 1 then
+    cmds = ["docker exec #{container_nm} ruby /home/rcms/rcms_util.rb #{site_id}",
+            "docker exec #{container_nm} service sshd restart",
+            "docker commit #{container_nm} #{virtual_host_url}",
+            "docker stop #{container_nm}",
+            "docker rm #{container_nm}"
+           ]
+    new_shell_cmds.push(cmds)
+  end
 
+  # docker build
+  if /docker build/.match(cmd) then
     #docker_fileを取得
     docker_file_url = cmd.scan(http_regex)[0][0]
-    pp docker_file_url
+
+    cmds = ["docker build -t rcms-#{site_id} #{docker_dir}",
+            "docker run --name #{container_nm} -v $GIT_RCMS/RCMS-OpenDev-ClosedBeta/nfs/:/home/rcms/nfs/ -p 80:80 -p 22 -d rcms-#{site_id} /usr/bin/supervisord"
+           ]
+    new_shell_cmds.push(cmds)
     next
   end
 
   new_shell_cmds.push(cmd)
 end
 
-new_shell_cmds.push("docker build -t rcms-#{site_id} #{docker_dir}")
-new_shell_cmds.push("rm -Rf $GIT_RCMS/sites/120960")
-
 pp new_shell_cmds
 
 docker_file = `curl -L "#{docker_file_url}"`
 docker_cmds = docker_file.split("\n")
 
+head_docker_cmds = [
+                    "RUN mkdir -p /home/diverta/.ssh",
+                    "RUN chmod 700 /home/diverta/.ssh",
+                    "ADD diverta.pub /home/diverta/.ssh/authorized_keys",
+                    "RUN chmod 600 /home/diverta/.ssh/authorized_keys",
+                    "RUN chown -R diverta:diverta /home/diverta/.ssh",
+                    "ADD rcms_util.rb /home/rcms/",
+                    # "ADD .mylib.php /home/rcms/",
+                    "ADD sites/#{site_id} /home/rcms/#{site_id}"
+                   ]
+
+new_docker_cmds = head_docker_cmds + docker_cmds
+
 #doker_fileを書き換え
 docker_cmds.each_with_index do |cmd,i|
   if /postgresql-/.match(cmd) then
-    new_docker_cmds.push("RUN mkdir -p /home/diverta/.ssh")
-    new_docker_cmds.push("RUN chmod 700 /home/diverta/.ssh")
-    new_docker_cmds.push("ADD diverta.pub /home/diverta/.ssh/authorized_keys")
-    new_docker_cmds.push("RUN chmod 600 /home/diverta/.ssh/authorized_keys")
-    new_docker_cmds.push("RUN chown -R diverta:diverta /home/diverta/.ssh")
-    new_docker_cmds.push("ADD rcms_util.rb /home/rcms/")
-    new_docker_cmds.push("RUN ruby /home/rcms/rcms_util.rb #{site_id}")
-    new_docker_cmds.push("RUN service sshd restart")
-    new_docker_cmds.push("RUN mkdir -p /home/rcms/#{site_id}/lib")
-    new_docker_cmds.push("ADD sites/#{site_id} /home/rcms/120960")
-
+    new_docker_cmds.concat(head_docker_cmds)
     cmd.gsub!(docker_ip,virtual_host_url)
   end
 
   new_docker_cmds.push(cmd)
 end
-
-# commitした後にやるべし
-
-# tmp_new_docker_cmds.each do |cmd|
-#   #ちょっと無理やり
-#   new_docker_cmds.push("RUN /etc/init.d/postgresql-9.4 start && #{cmd}")
-# end
-
-# new_docker_cmds.push("ADD .mylib.php /home/rcms/")
 
 # new_docker_cmds.push("LABEL vhosts_url=#{virtual_host_url}")
 
