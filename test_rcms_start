@@ -61,7 +61,8 @@ new_docker_cmds.push("-e VIRTUAL_HOST=#{virtual_host_url}")
 new_docker_cmds.push("-p 22")
 # new_docker_cmds.push("-p 80:80")
 new_docker_cmds.push("-d")
-new_docker_cmds.push("rcms-#{site_id}")
+# new_docker_cmds.push("rcms-#{site_id}")
+new_docker_cmds.push("#{virtual_host_url}")
 new_docker_cmds.push("/usr/bin/supervisord")
 
 
@@ -69,6 +70,7 @@ new_docker_cmd = new_docker_cmds.join(" ")
 
 p "exec \n #{new_docker_cmd}\n"
 
+# exit 0
 system(new_docker_cmd)
 
 docker_status = `docker ps -l`
